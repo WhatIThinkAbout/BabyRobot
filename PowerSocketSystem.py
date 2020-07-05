@@ -15,6 +15,9 @@ socket_order = [2,1,3,5,4]
 # the true values of each socket
 socket_means = [((q*2)+2) for q in socket_order]
 
+# save the number of sockets
+NUM_SOCKETS = len(socket_order)
+
 """
     Helper Functions
 """
@@ -57,9 +60,25 @@ class PowerSocket:
         return self.Q
 
 
+# Create an Optimistic Power Socket class by inheriting from the standard Power Socket
+class OptimisticPowerSocket( PowerSocket ):
+    def __init__( self, q, initial_estimate = 0. ):    
+        
+        # pass the true reward value to the base PowerSocket             
+        super().__init__(q)        
+        
+        # estimate of this socket's reward value 
+        # - set to supplied initial value
+        self.Q = initial_estimate                 
+        
+        # the number of times this socket has been tried 
+        # - set to 1 if an initialisation value is supplied
+        self.n = 1 if initial_estimate > 0 else 0                
+
+
 class SocketTester():
 
-    def __init__(self, socket, socket_order, initial_estimate = 0. ):  
+    def __init__(self, socket=OptimisticPowerSocket, socket_order=socket_order, initial_estimate = 0. ):  
         
         # create the supplied socket type with a mean value defined by the socket order       
         self.sockets = [socket((q*2)+2, initial_estimate) for q in socket_order]                  
