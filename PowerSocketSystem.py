@@ -107,6 +107,9 @@ class SocketTester():
         
         # monitor the total reward obtained over the run
         self.total_reward = 0
+        
+        # the current total reward at each timestep of the run
+        self.total_reward_per_timestep = []
            
         # stats for each time-step
         # - by default records: estimate, number of trials
@@ -126,7 +129,10 @@ class SocketTester():
         self.sockets[socket_index].update(reward)
 
         # update the total reward
-        self.total_reward += reward        
+        self.total_reward += reward   
+        
+        # store the current total reward at this timestep
+        self.total_reward_per_timestep.append(self.total_reward)
         
         
     def get_socket_stats( self, t ):
@@ -137,6 +143,10 @@ class SocketTester():
     def get_mean_reward( self ):
         """ the total reward averaged over the number of time steps """
         return (self.total_reward/self.number_of_steps)
+    
+    def get_total_reward_per_timestep( self ):
+        """ the cumulative total reward at each timestep of the run """
+        return self.total_reward_per_timestep
     
     def get_estimates(self):
         return self.socket_stats[:,:,0][-1]
@@ -201,14 +211,21 @@ class SocketExperiment():
     def initialize_run(self):
         
         # keep track of the average values over the run
-        self.reward_per_timestep = 0.
+        self.mean_total_reward = 0.
         self.optimal_selected = 0.                
         self.socket_percentages = np.zeros(self.number_of_sockets)   
         self.estimates = np.zeros(shape=(self.number_of_steps+1,self.number_of_sockets))
         
-    def get_reward_per_timestep(self):
-        """ the mean reward per timestep """
-        return self.reward_per_timestep
+        # the cumulative total reward per timestep
+        self.cumulative_reward_per_timestep = np.zeros(shape=(self.number_of_steps))
+        
+    def get_mean_total_reward(self):
+        """ the final total reward averaged over the number of timesteps """
+        return self.mean_total_reward
+    
+    def get_cumulative_reward_per_timestep(self):
+        """ the cumulative total reward per timestep """
+        return self.cumulative_reward_per_timestep
 
     def get_optimal_selected(self):
         """ the mean times the optimal socket was selected """
@@ -225,17 +242,21 @@ class SocketExperiment():
     def update_mean( self, current_mean, new_value, n ):
         """ calculate the new mean from the previous mean and the new value """
         return (1 - 1.0/n) * current_mean + (1.0/n) * new_value
+    
+    def update_mean_array( self, current_mean, new_value, n ):
+        """ calculate the new mean from the previous mean and the new value for an array """
+        return (1 - 1.0/n) * current_mean + (1.0/n) * np.array(new_value)    
         
     def record_test_stats(self,n):
         """ update the mean value for each statistic being tracked over a run """
 
         # calculate the new means from the old means and the new value
         tester = self.socket_tester
-        self.reward_per_timestep = self.update_mean( self.reward_per_timestep, tester.get_mean_reward(), n)
+        self.mean_total_reward = self.update_mean( self.mean_total_reward, tester.get_mean_reward(), n)
         self.optimal_selected = self.update_mean( self.optimal_selected, tester.get_optimal_socket_percentage(), n)
         self.socket_percentages = self.update_mean( self.socket_percentages, tester.get_socket_percentages(), n)
         self.estimates = self.update_mean( self.estimates, tester.get_estimates(), n)
-        
+        self.cumulative_reward_per_timestep = self.update_mean_array( self.cumulative_reward_per_timestep, tester.get_total_reward_per_timestep(), n)
     
     def run(self):
         """ repeat the test over a set of sockets for the specified number of trials """
