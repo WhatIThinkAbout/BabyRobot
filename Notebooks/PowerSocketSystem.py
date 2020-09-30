@@ -83,10 +83,10 @@ class PowerSocket:
 class SocketTester():
     """ create and test a set of sockets over a single test run """
 
-    def __init__(self, socket=PowerSocket, socket_order=socket_order, **kwargs ):  
+    def __init__(self, socket=PowerSocket, socket_order=socket_order, multiplier=2, **kwargs ):  
         
         # create supplied socket type with a mean value defined by socket order 
-        self.sockets = [socket((q*2)+2, **kwargs) for q in socket_order]     
+        self.sockets = [socket((q*multiplier)+2, **kwargs) for q in socket_order]     
         
         # set the number of sockets equal to the number created
         self.number_of_sockets = len(self.sockets)           
@@ -104,6 +104,9 @@ class SocketTester():
         
         # save the number of steps over which the run will take place
         self.number_of_steps = number_of_steps
+        
+        # reset the actual number of steps that the test ran for
+        self.total_steps = 0
         
         # monitor the total reward obtained over the run
         self.total_reward = 0
@@ -148,7 +151,7 @@ class SocketTester():
     
     def get_mean_reward( self ):
         """ the total reward averaged over the number of time steps """
-        return (self.total_reward/self.number_of_steps)
+        return (self.total_reward/self.total_steps)
     
     def get_total_reward_per_timestep( self ):
         """ the cumulative total reward at each timestep of the run """
@@ -168,12 +171,16 @@ class SocketTester():
                 
     def get_socket_percentages( self ):
         """ get the percentage of times each socket was tried over the run """
-        return (self.socket_stats[:,:,1][-1]/self.number_of_steps)        
+        return (self.socket_stats[:,:,1][self.total_steps]/self.total_steps)        
     
     def get_optimal_socket_percentage( self ):
         """ get the percentage of times the optimal socket was tried """        
-        final_trials = self.socket_stats[:,:,1][-1]
-        return (final_trials[self.optimal_socket_index]/self.number_of_steps)
+        final_trials = self.socket_stats[:,:,1][self.total_steps]
+        return (final_trials[self.optimal_socket_index]/self.total_steps)
+    
+    def get_time_steps( self ):
+        """ get the number of time steps that the test ran for """
+        return self.total_steps
     
 
     def select_socket( self, t ):
@@ -181,11 +188,11 @@ class SocketTester():
         
         # choose the socket with the current highest mean reward or arbitrarily
         # select a socket in the case of a tie            
-        socket_index = random_argmax([socket.sample() for socket in self.sockets]) 
+        socket_index = random_argmax([socket.sample(t+1) for socket in self.sockets]) 
         return socket_index     
     
     
-    def run( self, number_of_steps ):  
+    def run( self, number_of_steps, maximum_total_reward = float('inf')):  
         """ perform a single run, over the set of sockets, 
             for the defined number of steps """
         
@@ -203,9 +210,18 @@ class SocketTester():
             
             # charge from the chosen socket and update its mean reward value
             self.charge_and_update(socket_index)
+            
+            # test if the accumulated total reward is greater than the maximum
+            if self.total_reward > maximum_total_reward:
+                break
        
-        # get the stats for each socket at the end of the run
-        self.socket_stats[number_of_steps] = self.get_socket_stats(number_of_steps)        
+        # save the actual number of steps that have been run
+        self.total_steps = t    
+    
+        # get the stats for each socket at the end of the run        
+        self.socket_stats[t+1] = self.get_socket_stats(t+1)           
+        
+        return self.total_steps, self.total_reward
        
     
     
@@ -216,18 +232,21 @@ class SocketExperiment():
                  socket_tester = SocketTester,
                  number_of_tests = 1000,
                  number_of_steps = 30,                      
+                 maximum_total_reward = float('inf'),
                  **kwargs ):  
         
         self.socket_tester = socket_tester
         self.number_of_tests = number_of_tests
         self.number_of_steps = number_of_steps    
+        self.maximum_total_reward = maximum_total_reward
         self.number_of_sockets = self.socket_tester.number_of_sockets
-        
+                
     def initialize_run(self):
         
         # keep track of the average values over the run
         self.mean_total_reward = 0.
         self.optimal_selected = 0.                
+        self.mean_time_steps = 0.
         self.socket_percentages = np.zeros(self.number_of_sockets)   
         self.estimates = np.zeros(shape=(self.number_of_steps+1,self.number_of_sockets))        
         self.number_of_trials = np.zeros(shape=(self.number_of_steps+1,self.number_of_sockets))
@@ -264,15 +283,28 @@ class SocketExperiment():
     
     def get_number_of_trials(self):
         """ per socket number of trials """
-        return self.number_of_trials    
+        return self.number_of_trials  
+    
+    def get_mean_time_steps(self):
+        """ the average number of trials of each test """
+        return self.mean_time_steps
     
     def update_mean( self, current_mean, new_value, n ):
         """ calculate the new mean from the previous mean and the new value """
         return (1 - 1.0/n) * current_mean + (1.0/n) * new_value
     
+#     def update_mean_array( self, current_mean, new_value, n ):
+#         """ calculate the new mean from the previous mean and the new value for an array """
+#         return (1 - 1.0/n) * current_mean + (1.0/n) * np.array(new_value)   
+
     def update_mean_array( self, current_mean, new_value, n ):
         """ calculate the new mean from the previous mean and the new value for an array """
-        return (1 - 1.0/n) * current_mean + (1.0/n) * np.array(new_value)    
+
+        # pad the new array with its last value to make sure its the same length as the original        
+        pad_length = (current_mean.shape[0] - len(new_value))
+        new_array = np.pad(new_value,(0,pad_length), mode='constant', constant_values=new_value[-1])
+    
+        return (1 - 1.0/n) * current_mean + (1.0/n) * new_array
         
     def record_test_stats(self,n):
         """ update the mean value for each statistic being tracked over a run """
@@ -281,15 +313,19 @@ class SocketExperiment():
         tester = self.socket_tester
         self.mean_total_reward = self.update_mean( self.mean_total_reward, tester.get_mean_reward(), n)
         self.optimal_selected = self.update_mean( self.optimal_selected, tester.get_optimal_socket_percentage(), n)
-        self.socket_percentages = self.update_mean( self.socket_percentages, tester.get_socket_percentages(), n)
-
-        self.estimates = self.update_mean_array( self.estimates, tester.get_estimates(), n)
+        self.socket_percentages = self.update_mean( self.socket_percentages, tester.get_socket_percentages(), n)        
+        self.mean_time_steps = self.update_mean( self.mean_time_steps, tester.get_time_steps(), n)
         
         self.cumulative_reward_per_timestep = self.update_mean_array( self.cumulative_reward_per_timestep, 
-                                                                      tester.get_total_reward_per_timestep(), n)
-        self.reward_per_timestep = self.update_mean_array( self.reward_per_timestep, tester.get_reward_per_timestep(), n)
-        
-        self.number_of_trials = self.update_mean_array( self.number_of_trials, tester.get_number_of_trials(), n)
+                                                                      tester.get_total_reward_per_timestep(), n)        
+
+        # check if the tests are only running until a maximum reward value is reached
+        if self.maximum_total_reward == float('inf'):
+            self.estimates = self.update_mean_array( self.estimates, tester.get_estimates(), n)        
+            self.cumulative_reward_per_timestep = self.update_mean_array( self.cumulative_reward_per_timestep, 
+                                                                          tester.get_total_reward_per_timestep(), n)
+            self.reward_per_timestep = self.update_mean_array( self.reward_per_timestep, tester.get_reward_per_timestep(), n)
+            self.number_of_trials = self.update_mean_array( self.number_of_trials, tester.get_number_of_trials(), n)
     
     def run(self):
         """ repeat the test over a set of sockets for the specified number of trials """
@@ -299,6 +335,6 @@ class SocketExperiment():
         for n in range(1,self.number_of_tests+1):
 
             # do one run of the test                               
-            self.socket_tester.run( number_of_steps = self.number_of_steps )     
+            self.socket_tester.run( self.number_of_steps, self.maximum_total_reward )
             self.record_test_stats(n)                         
            
