@@ -43,7 +43,7 @@ class GridLevel():
   end_color = 'green'     # color of the exit square
 
   maze = None             # instance of maze if defined
-  debug_maze = True       # write the maze to a svg file
+  debug_maze = False      # write the maze to a svg file
   
   save_images = False     # enable writing canvas as an image
   
@@ -121,6 +121,50 @@ class GridLevel():
   
   def get_canvas_dimensions(self):
     return [self.total_width,self.total_height]
+
+
+  def get_available_actions(self,x,y,policy=None):
+    ''' return the list of available actions for the specified position in the grid '''
+    
+    # test if the level contains a maze
+    if self.maze is not None:        
+      cell = self.maze.cell_at( x, y )  
+      
+      # if a wall is present then that direction is not possible as an action
+      actions = {k: not v for k, v in cell.walls.items()}      
+    else:
+      # initially start with all actions being possible
+      actions = {'N':True,'E':True,'S':True,'W':True}
+
+      # if the center area is not part of the level then remove any actions that would move there
+      if self.fill_center == True:
+        if ((x >= 1 and x <= self.width-2) and (y >= 1 and y <= self.height-2)): 
+          actions = {}
+        else:
+          if   ((x >= 1 and x <= self.width-2) and (y == 0)): del actions['S'] 
+          elif ((x >= 1 and x <= self.width-2) and (y == self.height-1)): del actions['N'] 
+          elif ((y >= 1 and y <= self.height-2) and (x == 0)): del actions['E']             
+          elif ((y >= 1 and y <= self.height-2) and (x == self.width-1)): del actions['W']
+            
+      # remove actions that would move off the edges of the grid
+      if x == 0: del actions['W']
+      if x == self.width-1: del actions['E']
+      if y == 0: del actions['N']
+      if y == self.height-1: del actions['S']     
+      
+    # test if a policy has been defined
+    if policy is not None:
+      # set any allowed actions to false if they're not in the policy
+      dir_value = policy[y,x]
+      for direction,v in actions.items():        
+        if v == True:
+          if (direction == 'N') and not (dir_value & Direction.North): actions['N'] = False
+          if (direction == 'S') and not (dir_value & Direction.South): actions['S'] = False
+          if (direction == 'E') and not (dir_value & Direction.East):  actions['E'] = False
+          if (direction == 'W') and not (dir_value & Direction.West):  actions['W'] = False      
+      
+    return actions
+
                 
   '''
     Draw Functions

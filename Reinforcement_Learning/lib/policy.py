@@ -49,7 +49,7 @@ class Policy():
     return directions
           
   def calculate_cell_directions(self,x,y,values):
-    actions = self.get_available_actions(x,y)
+    actions = self.level.get_available_actions(x,y)
     
     directions = 0
     dir_value = 0
@@ -70,33 +70,6 @@ class Policy():
         elif value == best_value: directions += dir_value
                 
     return int(directions)
-          
-
-  def get_available_actions(self,x,y):
-    # test if the level contains a maze
-    if self.maze is not None:        
-      cell = self.maze.cell_at( x, y )  
-      
-      # if a wall is present then that direction is not possible as an action
-      actions = {k: not v for k, v in cell.walls.items()}      
-    else:
-      actions = {'N':True,'E':True,'S':True,'W':True}
-      if self.level.fill_center == True:
-        if ((x >= 1 and x <= self.level.width-2) and (y >= 1 and y <= self.level.height-2)): 
-          actions = {}
-        else:
-          if ((x >= 1 and x <= self.level.width-2) and (y == 0)): del actions['S'] 
-          elif ((x >= 1 and x <= self.level.width-2) and (y == self.level.height-1)): del actions['N'] 
-          elif ((y >= 1 and y <= self.level.height-2) and (x == 0)): del actions['E']             
-          elif ((y >= 1 and y <= self.level.height-2) and (x == self.level.width-1)): del actions['W']
-            
-      if x == 0: del actions['W']
-      if x == self.level.width-1: del actions['E']
-      if y == 0: del actions['N']
-      if y == self.level.height-1: del actions['S']        
-      
-    return actions   
-  
   
   def get_allowed_actions(self,x,y):
     
@@ -106,7 +79,9 @@ class Policy():
     end = self.level.get_end()    
     if x != end[0] or y != end[1]:    
     
-      actions = self.get_available_actions(x,y)    
+      # get the actions available for the level
+      actions = self.level.get_available_actions(x,y)    
+
       for direction,v in actions.items():
         # test the action is allowed
         if v == True:                  

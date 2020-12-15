@@ -1,4 +1,5 @@
 import numpy as np
+from grid_level import GridLevel
 
 
 ''' implement the Value Iteration algorithm '''
@@ -7,8 +8,7 @@ class ValueIteration():
   policy = None
     
   def __init__(self,level,discount_factor=0.9):
-    self.level = level    
-    self.maze = level.maze
+    self.level = level        
     self.values = np.zeros((level.height,level.width))
     self.discount_factor = discount_factor       
     
@@ -18,54 +18,12 @@ class ValueIteration():
     y = pos[1]
     if (x < 0 or x >= self.level.width) or (y < 0 or y >= self.level.height): return 0
     return self.values[y,x]    
-    
-  def get_available_actions(self,x,y):
-    ''' return the list of available actions for the specified position in the grid '''
-    
-    # test if the level contains a maze
-    if self.maze is not None:        
-      cell = self.maze.cell_at( x, y )  
-      
-      # if a wall is present then that direction is not possible as an action
-      actions = {k: not v for k, v in cell.walls.items()}      
-    else:
-      # initially start with all actions being possible
-      actions = {'N':True,'E':True,'S':True,'W':True}
-
-      # if the center area is not part of the level then remove any actions that would move there
-      if self.level.fill_center == True:
-        if ((x >= 1 and x <= self.level.width-2) and (y >= 1 and y <= self.level.height-2)): 
-          actions = {}
-        else:
-          if ((x >= 1 and x <= self.level.width-2) and (y == 0)): del actions['S'] 
-          elif ((x >= 1 and x <= self.level.width-2) and (y == self.level.height-1)): del actions['N'] 
-          elif ((y >= 1 and y <= self.level.height-2) and (x == 0)): del actions['E']             
-          elif ((y >= 1 and y <= self.level.height-2) and (x == self.level.width-1)): del actions['W']
-            
-      # remove actions that would move off the edges of the grid
-      if x == 0: del actions['W']
-      if x == self.level.width-1: del actions['E']
-      if y == 0: del actions['N']
-      if y == self.level.height-1: del actions['S']     
-      
-    # test if a policy has been defined
-    if self.policy is not None:
-      # set any allowed actions to false if they're not in the policy
-      dir_value = self.policy[y,x]
-      for direction,v in actions.items():        
-        if v == True:
-          if (direction == 'N') and not (dir_value & Direction.North): actions['N'] = False
-          if (direction == 'S') and not (dir_value & Direction.South): actions['S'] = False
-          if (direction == 'E') and not (dir_value & Direction.East):  actions['E'] = False
-          if (direction == 'W') and not (dir_value & Direction.West):  actions['W'] = False      
-      
-    return actions
   
   def calculate_max_action_value(self,x,y):
     ''' calculate the values of all actions in the specified cell and return the largest of these '''
     
     # get the list of available actions for this cell
-    actions = self.get_available_actions(x,y)
+    actions = self.level.get_available_actions(x,y,self.policy)
     
     # check that some actions are possible in this state
     if not actions: return 0        
