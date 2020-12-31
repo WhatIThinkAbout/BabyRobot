@@ -3,8 +3,12 @@ import os
 import numpy as np
 import random
 
+from random import uniform
+from math import pi
+
 from ipycanvas import MultiCanvas
 from ipycanvas import Canvas, hold_canvas
+from ipycanvas import RoughCanvas
 from ipywidgets import Image
 from ipywidgets import Layout
 from ipywidgets import Play, IntProgress, HBox, VBox, link
@@ -44,6 +48,8 @@ class GridLevel():
 
   maze = None             # instance of maze if defined
   debug_maze = False      # write the maze to a svg file
+
+  splashes = None         # set of tiles where splashes exist
   
   save_images = False     # enable writing canvas as an image
   
@@ -81,6 +87,11 @@ class GridLevel():
     else: self.end = end      
     
     self.setup_canvases(add_maze)
+
+  def add_splashes(self, splashes):
+    ''' store any splashes that exist on the grid level '''
+    self.splashes = splashes    
+    self.draw_splashes()
     
   '''
     Helper Methods
@@ -126,6 +137,10 @@ class GridLevel():
   def get_available_actions(self,x,y,policy=None):
     ''' return the list of available actions for the specified position in the grid '''
     
+    # no actions exist for the terminal state
+    if (x == self.end[0]) and (y == self.end[1]):
+      return {}
+
     # test if the level contains a maze
     if self.maze is not None:        
       cell = self.maze.cell_at( x, y )  
@@ -251,6 +266,10 @@ class GridLevel():
   def draw_level_base(self):
     ''' draw the base of the grid '''
     self.draw_rect(0, self.width_pixels, self.height_pixels, self.base_color) 
+    if self.side_panel_text:
+      canvas = self.canvases[0]
+      canvas.fill_style = 'white'
+      canvas.fill_rect(self.width_pixels+1, 0, 100, self.height_pixels) 
 
   def draw_grid(self,canvas):        
     ''' add dashed lines showing grid '''             
@@ -289,7 +308,120 @@ class GridLevel():
     canvas.text_align = 'left'
     canvas.font = 'bold 20px sans-serif'
     canvas.fill_text(str("EXIT"), end_x + 10, end_y + 40)     
-        
+
+  def draw_splashes(self):
+    if self.splashes is not None:
+      canvas = self.canvases[1]      
+      for row in range(self.height):
+        for col in range(self.width):
+          self.draw_splash( canvas, col, row, self.splashes[row][col] )    
+
+  def draw_splash(self,canvas,x,y,scale):
+
+    if scale > 0.:
+      splash_canvas = Canvas(width=self.cell_pixels, height=self.cell_pixels)
+      sprite = Image.from_file('images/splash_2.png')
+
+      with hold_canvas(splash_canvas):
+
+          splash_canvas.save()
+
+          pos_x = self.cell_pixels//2
+          pos_y = self.cell_pixels//2
+
+          # Choose a random rotation angle 
+          # (but first set the rotation center with `translate`)
+          splash_canvas.translate(pos_x, pos_y)
+          splash_canvas.rotate(uniform(0., pi))
+
+          # scale the image
+          splash_canvas.scale(scale)
+
+          # Restore the canvas center
+          splash_canvas.translate( -pos_x, -pos_y )
+
+          # Draw the sprite
+          splash_canvas.draw_image(sprite, 0, 0)
+          splash_canvas.restore()
+
+      x_px = x * self.cell_pixels + self.padding
+      y_px = y * self.cell_pixels + self.padding
+      canvas.draw_image(splash_canvas,x_px,y_px,width=self.cell_pixels,height=self.cell_pixels)
+
+  def draw_MDP(self):
+    ''' draw the level as an MDP '''
+
+    canvas = RoughCanvas( width=self.width*150+100, height=self.height*150+100, sync_image_data=True )
+
+    line_length = 54
+
+    with hold_canvas(canvas):
+
+      canvas.stroke_style = 'darkblue'
+
+      # draw the circles
+      for row in range(self.height):
+        for col in range(self.width):
+
+          if row == 0 and col == 0:
+              canvas.rough_fill_style = 'hachure'
+              canvas.fill_style = 'red'
+              canvas.roughness = 2
+              canvas.fill_circle(col*150 + 99, row*150 + 99, 100)
+              canvas.roughness = 1
+
+          if row == (self.height-1) and col == (self.width-1):
+              canvas.rough_fill_style = 'sunburst'
+              canvas.fill_style = 'green'
+              canvas.roughness = 2
+              canvas.fill_circle(col*150 + 99, row*150 + 99, 100)
+              canvas.roughness = 1
+
+          if self.splashes is not None:
+            splash = self.splashes[row][col]
+            if splash > 0.: 
+              if splash == 1.0: canvas.fill_style = 'blue'
+              else: canvas.fill_style = '#00BFFF'              
+
+              canvas.rough_fill_style = 'hachure'                
+              canvas.roughness = 2
+              canvas.fill_circle(col*150 + 99, row*150 + 99, 100)
+              canvas.roughness = 1                    
+
+          canvas.stroke_circle(col*150 + 100, row*150 + 100, 100)
+
+      # draw horizontal lines
+      for row in range(self.height):
+        for col in range(self.width-1):
+          x = col*150 + 148
+          y = row*150 + 80
+          canvas.stroke_line(x, y, x+line_length, y)
+          canvas.stroke_line(x, y, x+14, y-6)
+          canvas.stroke_line(x, y, x+14, y+6)
+
+          x = col*150 + 148
+          y = row*150 + 120
+          canvas.stroke_line(x, y, x+line_length, y)
+          canvas.stroke_line(x+40, y-6, x+line_length, y)
+          canvas.stroke_line(x+40, y+6, x+line_length, y)
+
+      # draw vertical lines
+      for row in range(self.height-1):
+        for col in range(self.width):
+          x = col*150 + 80
+          y = row*150 + 148
+          canvas.stroke_line(x, y, x, y+line_length)
+          canvas.stroke_line(x-6, y+40, x, y+line_length)
+          canvas.stroke_line(x+6, y+40, x, y+line_length)
+
+          x = col*150 + 120
+          y = row*150 + 148
+          canvas.stroke_line(x, y, x, y+line_length)
+          canvas.stroke_line(x, y, x-6, y+14)
+          canvas.stroke_line(x, y, x+6, y+14)
+
+    return canvas
+
         
   def create_canvases(self):        
                 
@@ -391,7 +523,11 @@ class GridLevel():
     canvas = self.canvases[canvas_id]
     with hold_canvas(canvas): 
       
-      canvas.clear_rect(70,70,190,56)      
+      # if a central area is being used to display messages clear this
+      if self.fill_center == True:
+        canvas.clear_rect(70,70,190,56)      
+      else:
+        canvas.clear_rect(x,y,190,56)    
       canvas.fill_style = color
       canvas.text_align = 'center'
       canvas.font = font
