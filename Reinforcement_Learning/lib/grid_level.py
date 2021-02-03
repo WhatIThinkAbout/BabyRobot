@@ -322,9 +322,7 @@ class GridLevel():
       splash_canvas = Canvas(width=self.cell_pixels, height=self.cell_pixels)
       sprite = Image.from_file('images/splash_2.png')
 
-      with hold_canvas(splash_canvas):
-
-          splash_canvas.save()
+      with hold_canvas(splash_canvas):          
 
           pos_x = self.cell_pixels//2
           pos_y = self.cell_pixels//2
@@ -341,8 +339,7 @@ class GridLevel():
           splash_canvas.translate( -pos_x, -pos_y )
 
           # Draw the sprite
-          splash_canvas.draw_image(sprite, 0, 0)
-          splash_canvas.restore()
+          splash_canvas.draw_image(sprite, 0, 0)          
 
       x_px = x * self.cell_pixels + self.padding
       y_px = y * self.cell_pixels + self.padding
