@@ -515,7 +515,7 @@ class GridLevel():
           dir_list = self.get_direction_list(directions,row,col)
           self.show_cell_directions(row,col,dir_list,color='#0000cc')
           
-  def side_panel_text(self,x,y,text,canvas_id=3,font='bold 14px sans-serif', color='#000'):
+  def side_panel_text(self,x,y,text,canvas_id=3,font='bold 14px sans-serif', color='#000', align='center'):
     ''' add information text in the side panel '''
     canvas = self.canvases[canvas_id]
     with hold_canvas(canvas): 
@@ -526,6 +526,6 @@ class GridLevel():
       else:
         canvas.clear_rect(x,y,190,56)    
       canvas.fill_style = color
-      canvas.text_align = 'center'
+      canvas.text_align = align
       canvas.font = font
       canvas.fill_text(text, x, y) 

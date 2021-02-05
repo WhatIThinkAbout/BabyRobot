@@ -2,6 +2,7 @@ from enum import IntFlag
 
 ''' simple helper class to enumerate directions in the grid levels '''
 class Direction(IntFlag):
+    Stay = 0
     North = 1
     East = 2
     South = 4
