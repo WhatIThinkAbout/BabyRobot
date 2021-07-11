@@ -1,4 +1,4 @@
-import grid_level
+# import .grid_level
 from direction import Direction
 import threading
 from time import sleep, time

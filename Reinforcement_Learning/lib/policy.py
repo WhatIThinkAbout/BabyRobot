@@ -36,6 +36,7 @@ class Policy():
           
     # update the policy
     self.directions = greedy_directions
+    return self.directions
   
   
   def calculate_greedy_directions(self,values):    
@@ -70,8 +71,10 @@ class Policy():
         elif value == best_value: directions += dir_value
                 
     return int(directions)
+
   
   def get_allowed_actions(self,x,y):
+    ''' return a list of the allowed actions for the specified state '''
     
     allowed_actions = []
     

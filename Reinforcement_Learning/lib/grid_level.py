@@ -5,6 +5,7 @@ import random
 
 from random import uniform
 from math import pi
+from enum import IntEnum
 
 from ipycanvas import MultiCanvas
 from ipycanvas import Canvas, hold_canvas
@@ -16,6 +17,9 @@ from ipywidgets import Play, IntProgress, HBox, VBox, link
 from maze import Maze
 from direction import Direction
 from arrows import Arrows
+
+class Puddle(IntEnum):
+    Dry, Small, Large = range(3)   
 
 
 '''
@@ -61,7 +65,9 @@ class GridLevel():
                add_compass = False, 
                side_panel = False,
                fill_center = False,
-               show_start_text = False):
+               show_start_text = False,
+               show_end_text = True,
+               working_directory = "."):
     
     self.width = width
     self.height = height
@@ -70,6 +76,8 @@ class GridLevel():
     self.add_compass = add_compass
     self.side_panel = side_panel
     self.show_start_text = show_start_text
+    self.show_end_text = show_end_text
+    self.working_directory = working_directory
     
     # calculate other cell values
     self.calculate_dimensions()
@@ -92,6 +100,26 @@ class GridLevel():
     ''' store any splashes that exist on the grid level '''
     self.splashes = splashes    
     self.draw_splashes()
+
+  def add_walls(self, walls):
+    ''' add the specified walls to the grid '''
+
+    # begin with a maze with no walls
+    self.maze = Maze(self.width, self.height, self.start[0], self.start[1], no_walls = True)
+
+    for (x, y), direction in walls:
+        current_cell = self.maze.cell_at(x,y)
+        if   direction == 'E': next_cell = self.maze.cell_at(x+1,y)
+        elif direction == 'W': next_cell = self.maze.cell_at(x-1,y)
+        elif direction == 'N': next_cell = self.maze.cell_at(x,y-1)
+        elif direction == 'S': next_cell = self.maze.cell_at(x,y+1)
+        current_cell.add_wall(next_cell, direction)     
+
+    canvas = self.canvases[1]    
+    self.maze.write_to_canvas( canvas,
+                               self.height*self.cell_pixels,
+                               self.padding)     
+
     
   '''
     Helper Methods
@@ -180,6 +208,77 @@ class GridLevel():
       
     return actions
 
+
+  def get_puddle_size( self, x, y ):
+    ''' get the size of the puddle at the supplied location '''
+    if self.splashes is not None:
+      return Puddle(self.splashes[y][x])    
+    return Puddle.Dry
+
+  def get_action_reward( self, x, y ):
+    ''' get the reward for taking an action that moves to the state at (x,y) '''
+    puddle_size = self.get_puddle_size( x, y )
+    return -pow(2,puddle_size)
+
+  def get_transition_probability( self, x, y ):
+    ''' get the probability of moving to the target state when starting in the state at (x,y) '''
+    puddle_size = self.get_puddle_size( x, y )
+    if puddle_size == Puddle.Large: return 0.4
+    if puddle_size == Puddle.Small: return 0.6
+    
+    # if no puddle then guaranteed to reach target
+    return 1.
+
+  def get_next_state_position( self, x, y, direction ):
+    ''' given the current state position and direction calculate the postion of the next state '''
+    next_pos = []    
+    if direction == 'N': next_pos = [x,y-1]
+    if direction == 'S': next_pos = [x,y+1]
+    if direction == 'E': next_pos = [x+1,y]
+    if direction == 'W': next_pos = [x-1,y] 
+    return next_pos    
+
+
+  def get_next_state( self, x, y ):
+    ''' return the next state and reward for moving '''
+        
+    # check that some actions are possible in this state
+    policy_actions = self.get_available_actions(x,y,self.policy)
+    if not policy_actions: return 0
+
+    # a deterministic policy should only have one possible action
+    chosen_action = [key for (key, value) in policy_actions.items() if value]
+    assert len(chosen_action) == 1   
+
+    # get the list of all other possible states
+    all_actions = self.level.get_available_actions(x,y)     
+    all_actions.pop(chosen_action[0], None)
+    other_states = [key for (key, value) in all_actions.items() if value]
+
+    # get the probability of moving to the intended target
+    transition_probability = self.level.get_transition_probability( x, y )
+ 
+    # if the probability is less than the transition probability then move to the target        
+    # of if the target state is the only allowed state
+    if (np.random.random() < transition_probability) or (len(other_states) == 0):
+      direction = chosen_action[0]
+    else:
+      # choose one of the other possible states
+      direction = np.random.choice(other_states)
+
+    # calculate the postion of the next state
+    next_pos = []    
+    if direction == 'N': next_pos = [x,y-1]
+    if direction == 'S': next_pos = [x,y+1]
+    if direction == 'E': next_pos = [x+1,y]
+    if direction == 'W': next_pos = [x-1,y]       
+
+    # get the reward for taking this action
+    reward = self.level.get_action_reward( next_pos[0], next_pos[1] )
+
+    # for equal probability of taking an action its just the mean of all actions
+    return next_pos, reward    
+
                 
   '''
     Draw Functions
@@ -217,7 +316,8 @@ class GridLevel():
   def draw_maze(self,canvas):    
     self.maze = Maze(self.width, self.height, self.start[0], self.start[1], seed = self.maze_seed)
     self.maze.make_maze()        
-    if self.debug_maze: self.maze.write_svg('maze.svg')
+    if self.debug_maze: 
+      self.maze.write_svg(os.path.join(self.working_directory, "maze.svg"))
 
     self.maze.write_to_canvas( canvas,
                                self.height*self.cell_pixels,
@@ -305,9 +405,10 @@ class GridLevel():
     canvas.fill_style = self.end_color
     canvas.fill_rect(end_x, end_y, self.cell_pixels, self.cell_pixels)    
     canvas.fill_style = '#fff'
-    canvas.text_align = 'left'
-    canvas.font = 'bold 20px sans-serif'
-    canvas.fill_text(str("EXIT"), end_x + 10, end_y + 40)     
+    if self.show_end_text:
+      canvas.text_align = 'left'
+      canvas.font = 'bold 20px sans-serif'
+      canvas.fill_text(str("EXIT"), end_x + 10, end_y + 40)     
 
   def draw_splashes(self):
     if self.splashes is not None:
@@ -316,11 +417,15 @@ class GridLevel():
         for col in range(self.width):
           self.draw_splash( canvas, col, row, self.splashes[row][col] )    
 
-  def draw_splash(self,canvas,x,y,scale):
+  def draw_splash(self,canvas,x,y,puddle_type):
 
-    if scale > 0.:
+    if puddle_type > 0:
+
+      # scale the puddle image according to its type (big or small)
+      scale = puddle_type / 2
+
       splash_canvas = Canvas(width=self.cell_pixels, height=self.cell_pixels)
-      sprite = Image.from_file('images/splash_2.png')
+      sprite = Image.from_file(os.path.join(self.working_directory,'images/splash_2.png'))
 
       with hold_canvas(splash_canvas):          
 
@@ -469,6 +574,11 @@ class GridLevel():
           back_color = "rgba(0, 0, 0, 0.8)"            
         self.show_cell_value( row, col, values[row][col], color, back_color )          
           
+
+  '''
+      Direction Functions
+  '''
+
   def draw_directions(self, canvas, col, row, directions, color):
     ''' draw arrow in each direction in supplied list '''
     x,y = self.grid_to_pixels( [row,col], self.padding, self.padding )    
@@ -514,9 +624,81 @@ class GridLevel():
         if col != self.end[0] or row != self.end[1]:
           dir_list = self.get_direction_list(directions,row,col)
           self.show_cell_directions(row,col,dir_list,color='#0000cc')
+
+
+  def get_direction_list_value( self, direction_list ):
+    ''' convert a list of directions into a direction value '''
+    dir_value = 0
+    for direction,v in direction_list.items():
+      # test the action is allowed
+      if v == True:                  
+        
+        # calculate the postion of the next state              
+        if   direction == 'N': dir_value += Direction.North          
+        elif direction == 'S': dir_value += Direction.South  
+        elif direction == 'E': dir_value += Direction.East  
+        elif direction == 'W': dir_value += Direction.West  
+    
+    return dir_value
+
+
+  def choose_one_direction( self, direction_list ):
+    ''' randomly choose one direction from the available directions '''
+
+    if len(direction_list) == 0: return 0
+
+    directions = []
+    for direction,v in direction_list.items():
+      # test the action is allowed    
+      if v == True:  
+        if   direction == 'N': directions.append( Direction.North )
+        elif direction == 'S': directions.append( Direction.South )
+        elif direction == 'E': directions.append( Direction.East )
+        elif direction == 'W': directions.append( Direction.West )     
+
+    return random.choice(directions)    
+      
+
+  def get_available_directions( self ):
+    ''' return the table of available directions for the whole level '''
+
+    directions = np.zeros((self.height, self.width), dtype=np.int)
+    for row in range(self.height):
+      for col in range(self.width):
+        # dont show directions on the exit
+        if col != self.end[0] or row != self.end[1]:
+            actions = self.get_available_actions(col,row)
+            directions[row][col] = self.get_direction_list_value(actions)
+    
+    return directions
+
+
+  def get_one_direction(self):
+
+    # directions = self.get_available_directions()
+
+    directions = np.zeros((self.height, self.width), dtype=np.int)
+    for row in range(self.height):
+      for col in range(self.width):
+        # dont show directions on the exit
+        if col != self.end[0] or row != self.end[1]:
+          # n = directions[row,col]
+          # power_of_two = (n & (n-1) == 0) and n != 0   
+          # if not power_of_two: 
+            actions = self.get_available_actions(col,row)              
+            directions[row,col] = self.choose_one_direction( actions )    
+    
+    return directions 
+
+
           
-  def side_panel_text(self,x,y,text,canvas_id=3,font='bold 14px sans-serif', color='#000', align='center'):
+  def side_panel_text( self, x, y, text, canvas_id=0,
+                       font='bold 14px sans-serif',
+                       color='#000', 
+                       text_align='left',
+                       text_baseline='top'):                       
     ''' add information text in the side panel '''
+
     canvas = self.canvases[canvas_id]
     with hold_canvas(canvas): 
       
@@ -524,8 +706,12 @@ class GridLevel():
       if self.fill_center == True:
         canvas.clear_rect(70,70,190,56)      
       else:
-        canvas.clear_rect(x,y,190,56)    
+        canvas.clear_rect(x,y-5,190,20)        
+        canvas.fill_style = 'white'
+        canvas.fill_rect(x,y-5,190,20) 
+
       canvas.fill_style = color
-      canvas.text_align = align
+      canvas.text_align = text_align
+      canvas.text_baseline = text_baseline
       canvas.font = font
       canvas.fill_text(text, x, y) 

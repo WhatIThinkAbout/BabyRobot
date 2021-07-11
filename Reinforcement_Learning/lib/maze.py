@@ -13,15 +13,20 @@ class Cell:
     # A wall separates a pair of cells in the N-S or W-E directions.
     wall_pairs = {'N': 'S', 'S': 'N', 'E': 'W', 'W': 'E'}
 
-    def __init__(self, x, y):
+    def __init__(self, x, y, no_walls = False):
         """Initialize the cell at (x,y). At first it is surrounded by walls."""
 
         self.x, self.y = x, y
-        self.walls = {'N': True, 'S': True, 'E': True, 'W': True}
+
+        if no_walls:
+          self.walls = {'N': False, 'S': False, 'E': False, 'W': False }
+        else:
+          self.walls = {'N': True, 'S': True, 'E': True, 'W': True}
 
     def has_all_walls(self):
         """Does this cell still have all its walls?"""
 
+        # check if all items in the list are true
         return all(self.walls.values())
 
     def knock_down_wall(self, other, wall):
@@ -30,11 +35,17 @@ class Cell:
         self.walls[wall] = False
         other.walls[Cell.wall_pairs[wall]] = False
 
+    def add_wall(self, other, wall):
+        """Add a wall between cells self and other."""
+
+        self.walls[wall] = True
+        other.walls[Cell.wall_pairs[wall]] = True        
+
 
 class Maze:
     """A Maze, represented as a grid of cells."""
 
-    def __init__(self, nx, ny, ix=0, iy=0, seed = None):
+    def __init__(self, nx, ny, ix=0, iy=0, seed = None, no_walls = False):
         """Initialize the maze grid.
         The maze consists of nx x ny cells and will be constructed starting
         at the cell indexed at (ix, iy).
@@ -45,7 +56,24 @@ class Maze:
         
         self.nx, self.ny = nx, ny
         self.ix, self.iy = ix, iy
-        self.maze_map = [[Cell(x, y) for y in range(ny)] for x in range(nx)]
+        self.maze_map = [[Cell(x, y, no_walls) for y in range(ny)] for x in range(nx)]
+
+        if no_walls:
+          self.add_boundary_walls()
+
+    def add_boundary_walls(self):
+        """ add walls around the outside of the level """
+        for y in range(self.ny):
+          for x in range(self.nx):
+            if y == 0:
+              self.cell_at(x, y).walls['N'] = True
+            elif (y+1) == self.ny:
+              self.cell_at(x, y).walls['S'] = True
+
+            if x == 0:
+              self.cell_at(x, y).walls['W'] = True
+            elif (x+1) == self.nx:
+              self.cell_at(x, y).walls['E'] = True              
 
     def cell_at(self, x, y):
         """Return the Cell object at (x,y)."""

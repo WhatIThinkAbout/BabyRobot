@@ -2,6 +2,7 @@ import numpy as np
 from grid_level import GridLevel
 
 
+
 ''' implement the Value Iteration algorithm '''
 class ValueIteration():    
   
@@ -18,31 +19,57 @@ class ValueIteration():
     y = pos[1]
     if (x < 0 or x >= self.level.width) or (y < 0 or y >= self.level.height): return 0
     return self.values[y,x]    
-  
+
   def calculate_max_action_value(self,x,y):
-    ''' calculate the values of all actions in the specified cell and return the largest of these '''
-    
-    # get the list of available actions for this cell
-    actions = self.level.get_available_actions(x,y,self.policy)
+    ''' 
+        calculate the values of all actions in the specified cell and return the largest of these
+        - the next state value is given by:  v(s) = max[r + γv(s')]       
+    '''
     
     # check that some actions are possible in this state
-    if not actions: return 0        
+    policy_actions = self.level.get_available_actions(x,y,self.policy)
+    if not policy_actions: return 0      
     
     # calculate the value of each action in the state and save the largest
     max_value = float('-inf')
-    for direction,v in actions.items():
+    for policy_direction,policy_v in policy_actions.items():
       # test the action is allowed
-      if v == True:                
+      if policy_v == True:       
 
-        # calculate the postion of the next state
-        next_pos = []        
-        if direction == 'N': next_pos = [x,y-1]
-        if direction == 'S': next_pos = [x,y+1]
-        if direction == 'E': next_pos = [x+1,y]
-        if direction == 'W': next_pos = [x-1,y]
+        # get the list of all other possible states
+        all_actions = self.level.get_available_actions(x,y)  
 
-        # always -1 for taking an action
-        value = -1 + (self.discount_factor * self.get_state_value( next_pos ))
+        # count the number of states other than the target state
+        num_alternative_states = sum(all_actions.values()) - 1         
+
+        # get the probability of moving to the intended target
+        transition_probability = self.level.get_transition_probability( x, y )                       
+
+        # if there are no alternative states then the probability of moving to the target is 1
+        if num_alternative_states == 0: 
+          transition_probability = 1.
+
+        # sum the rewards and values of the possible next states
+        value = 0
+        for direction,v in all_actions.items():
+          # test the action is allowed
+          if v == True:
+
+            # calculate the probability of moving to this state
+            if direction == policy_direction: 
+              probability = transition_probability
+            else: 
+              probability = (1-transition_probability)/num_alternative_states
+
+            # calculate the postion of the next state
+            next_pos = self.level.get_next_state_position( x, y, direction )
+            
+            # get the reward for taking this action
+            reward = self.level.get_action_reward( next_pos[0], next_pos[1] )
+
+            # combine the reward with discounted value of the next state and 
+            # sum over each of the transition probabilities p(s'|s,a)
+            value += probability * (reward + (self.discount_factor * self.get_state_value( next_pos ))) 
         
         # save the largest value
         if value > max_value:
