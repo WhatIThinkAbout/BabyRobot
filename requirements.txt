@@ -2,6 +2,6 @@ babyrobot==1.0.22
 gymnasium==0.27.0
 numpy>=1.21.6
 imageio==2.23.0
-ipycanvas==0.8.2
+ipycanvas==0.11.0
 matplotlib==3.1.1
 scipy==1.4.1
