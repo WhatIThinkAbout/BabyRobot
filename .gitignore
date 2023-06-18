@@ -3,3 +3,6 @@ __pycache__/
 *.pyc
 ./Reinforcement_Learning/lib/__pycache__/
 ./**/__pycache__/
+
+./Reinforcement_Learning/.ipynb_checkpoints
+*-checkpoint.ipynb
