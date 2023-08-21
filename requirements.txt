@@ -3,5 +3,13 @@ gymnasium==0.27.0
 numpy>=1.21.6
 imageio==2.23.0
 ipycanvas==0.11.0
+ipykernel>=6.16.2
+ipython_genutils==0.2.0
+ipywidgets==8.0.4
+jupyter-client==7.4.8
+jupyter-core>=5.0.0rc2
+jupyter-packaging==0.12.2
+jupyterlab-widgets==3.0.5
+tqdm==4.64.0
 matplotlib==3.1.1
 scipy==1.4.1
