@@ -12,4 +12,4 @@ jupyter-packaging==0.12.2
 jupyterlab-widgets==3.0.5
 tqdm==4.64.0
 matplotlib==3.1.1
-scipy==1.4.1
+scipy==1.10.0
